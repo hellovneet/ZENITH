@@ -1,0 +1,36 @@
+{
+  "name": "qubit-lab",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "npm@10.9.2",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "vite preview",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^2.23.0",
+    "@supabase/supabase-js": "^2.116.0",
+    "lucide-react": "0.546.0",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.185.4",
+    "@vitejs/plugin-react": "^5.0.4",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.3"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}

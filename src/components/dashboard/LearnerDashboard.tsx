@@ -1,0 +1,172 @@
+import React from 'react';
+import { ArrowRight, Beaker, BookOpen, CheckCircle2, Circle, Code2, Layers, Sparkles, Target, TrendingUp } from 'lucide-react';
+import { CONCEPT_NODES, GOAL_LABELS } from '../../data/adaptiveLearning';
+import { AdaptiveState, getNextConcept, getMasteryAverage } from '../../utils/adaptive';
+import { UserProgress } from '../../types/quantum';
+import { useLanguage } from '../../i18n/LanguageContext';
+
+type AppTab = 'dashboard' | 'curriculum' | 'composer' | 'bloch' | 'sandbox' | 'quiz';
+interface Props { progress: UserProgress; adaptive: AdaptiveState; onNavigate: (tab: AppTab) => void; onOpenTopic: (topicId: string) => void; }
+
+export const LearnerDashboard: React.FC<Props> = ({ progress, adaptive, onNavigate, onOpenTopic }) => {
+  const { t, isHindi, localizeTopicTitle } = useLanguage();
+  const copy = t.dashboard;
+  const next = getNextConcept(adaptive);
+  const average = getMasteryAverage(adaptive);
+  const completed = CONCEPT_NODES.filter((node) => (adaptive.mastery[node.id] ?? 0) >= 80).length;
+  const bestQuiz = Object.values(progress.quizScores).reduce((best, score) => Math.max(best, Number.isFinite(score) ? score : 0), 0);
+
+  return (
+    <div className="space-y-6 py-5">
+      <section className="glass-panel rounded-2xl p-6 sm:p-8">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div>
+            <div className="text-[10px] uppercase tracking-[.2em] text-zinc-500">{copy.system}</div>
+            <h1 className="text-3xl sm:text-4xl font-semibold text-zinc-100 mt-2">{copy.heroTitle}</h1>
+            <p className="text-sm text-zinc-500 mt-2">
+              {copy.goal}: <span className="text-zinc-300">{adaptive.profile ? GOAL_LABELS[adaptive.profile.goal] : copy.exploreDefault}</span>
+            </p>
+          </div>
+          <div className="min-w-[220px]">
+            <div className="flex justify-between text-xs">
+              <span className="text-zinc-500">{copy.overallMastery}</span>
+              <span className="font-mono text-[#dfff3f]">{average}%</span>
+            </div>
+            <div className="h-2 bg-white/5 rounded-full mt-2 overflow-hidden">
+              <div className="h-full bg-[#dfff3f]" style={{ width: `${average}%` }} />
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-7">
+          <Stat label={copy.mastery} value={`${average}%`} />
+          <Stat label={copy.conceptsMastered} value={`${completed}/${CONCEPT_NODES.length}`} />
+          <Stat label={copy.predictionAccuracy} value={`${adaptive.predictionAccuracy}%`} />
+          <Stat label={copy.recordedPredictions} value={`${adaptive.predictionCount}`} />
+          <Stat label={copy.xp} value={`${progress.xp}`} />
+        </div>
+      </section>
+
+      <div className="grid lg:grid-cols-[1.25fr_.75fr] gap-6">
+        <section className="glass-section rounded-2xl p-6">
+          <div className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-[#dfff3f]" />
+            <h2 className="font-semibold text-zinc-100">{copy.recommendedNext}</h2>
+          </div>
+          <div className="mt-5 rounded-xl border border-[#dfff3f]/20 bg-[#dfff3f]/5 p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-[10px] font-mono text-[#dfff3f] uppercase">{next.category}</div>
+                <h3 className="text-xl font-semibold text-zinc-100 mt-1">
+                  {localizeTopicTitle(next.id, next.title)}
+                </h3>
+              </div>
+              <span className="text-[10px] font-mono text-zinc-500">{next.duration} {copy.minShort}</span>
+            </div>
+            <p className="text-sm leading-6 text-zinc-400 mt-3">{next.objective}</p>
+            <button
+              onClick={() => onOpenTopic(next.id)}
+              className="template-button px-4 py-2.5 rounded-lg text-xs font-semibold mt-5 inline-flex items-center gap-2"
+            >
+              {copy.openTopic} <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </section>
+
+        <section className="glass-section rounded-2xl p-6">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-indigo-300" />
+            <h2 className="font-semibold text-zinc-100">{copy.learningSignals}</h2>
+          </div>
+          <div className="space-y-3 mt-5">
+            <Signal label={copy.predictionAccuracy} value={`${adaptive.predictionAccuracy}%`} />
+            <Signal label={copy.recordedPredictions} value={`${adaptive.predictionCount}`} />
+            <Signal label={copy.bestQuizScore} value={`${bestQuiz}%`} />
+          </div>
+        </section>
+      </div>
+
+      <section className="glass-section rounded-2xl p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[10px] uppercase tracking-[.2em] text-zinc-500">{copy.conceptMap}</div>
+            <h2 className="text-xl font-semibold text-zinc-100 mt-1">{copy.whereYouStand}</h2>
+          </div>
+          <span className="text-[10px] font-mono text-zinc-500">{completed} {copy.mastered}</span>
+        </div>
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-5">
+          {CONCEPT_NODES.map((node) => {
+            const mastery = adaptive.mastery[node.id] ?? 0;
+            const locked = node.prerequisites.some((id) => (adaptive.mastery[id] ?? 0) < 55);
+            return (
+              <button
+                key={node.id}
+                disabled={locked}
+                onClick={() => onOpenTopic(node.id)}
+                className={`text-left p-4 rounded-xl border transition-all ${
+                  locked ? 'border-white/5 bg-black/15 opacity-45 cursor-not-allowed' : 'border-white/10 bg-black/25 hover:border-white/25'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {mastery >= 80 ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    ) : locked ? (
+                      <Circle className="w-4 h-4 text-zinc-700" />
+                    ) : (
+                      <Beaker className="w-4 h-4 text-[#dfff3f]" />
+                    )}
+                    <span className="text-sm text-zinc-200">{localizeTopicTitle(node.id, node.title)}</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-500">{mastery}%</span>
+                </div>
+                <div className="h-1 bg-white/5 rounded-full mt-3">
+                  <div className="h-full bg-[#dfff3f]" style={{ width: `${mastery}%` }} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="grid sm:grid-cols-3 gap-3">
+        <Quick icon={BookOpen} title={copy.learn} text={copy.readAndVisualize} onClick={() => onNavigate('curriculum')} />
+        <Quick icon={Layers} title={copy.experiment} text={copy.buildCircuit} onClick={() => onNavigate('composer')} />
+        <Quick icon={Code2} title={copy.code} text={copy.explorePython} onClick={() => onNavigate('sandbox')} />
+      </section>
+
+      <div className="text-[10px] font-mono text-zinc-600 flex items-center gap-2">
+        <Sparkles className="w-3 h-3" /> {copy.recommendationsFooter}
+      </div>
+    </div>
+  );
+};
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/25 p-3">
+      <div className="text-[10px] text-zinc-600">{label}</div>
+      <div className="text-sm font-mono text-zinc-200 mt-1">{value}</div>
+    </div>
+  );
+}
+
+function Signal({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between rounded-xl border border-white/5 bg-black/20 px-4 py-3 text-xs">
+      <span className="text-zinc-500">{label}</span>
+      <span className="font-mono text-zinc-200">{value}</span>
+    </div>
+  );
+}
+
+function Quick({ icon: Icon, title, text, onClick }: { icon: React.ElementType; title: string; text: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="glass-card rounded-xl p-4 text-left flex items-center gap-3">
+      <Icon className="w-5 h-5 text-[#dfff3f]" />
+      <div>
+        <div className="text-sm font-semibold text-zinc-100">{title}</div>
+        <div className="text-xs text-zinc-500">{text}</div>
+      </div>
+    </button>
+  );
+}

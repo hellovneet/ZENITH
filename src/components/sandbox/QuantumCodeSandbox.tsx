@@ -1,0 +1,429 @@
+import React, { useState } from 'react';
+import { 
+  Terminal, Play, Copy, Check, Sparkles, 
+  Bug 
+} from 'lucide-react';
+import { useLanguage } from '../../i18n/LanguageContext';
+
+interface QuantumCodeSandboxProps {
+  onAskAIDebug?: (code: string, framework: string) => void;
+  onAskAIExplain?: (code: string, framework: string) => void;
+}
+
+const TEMPLATES: Record<string, Record<string, string>> = {
+  qiskit: {
+    bell: `# Qiskit: Bell State |Phi+>
+from qiskit import QuantumCircuit, transpile
+from qiskit_aer import AerSimulator
+
+# Initialize 2 qubits and 2 classical bits
+qc = QuantumCircuit(2, 2)
+qc.h(0)          # Create superposition on q0
+qc.cx(0, 1)      # Entangle q0 and q1 with CNOT
+qc.measure([0, 1], [0, 1])
+
+# Run on Aer Simulator
+simulator = AerSimulator()
+compiled_circuit = transpile(qc, simulator)
+job = simulator.run(compiled_circuit, shots=1024)
+result = job.result()
+counts = result.get_counts()
+
+print("Circuit Diagram:")
+print(qc.draw(output="text"))
+print("\\nMeasurement counts (1024 shots):", counts)`,
+    ghz: `# Qiskit: 3-Qubit Greenberger-Horne-Zeilinger (GHZ) State
+from qiskit import QuantumCircuit, transpile
+from qiskit_aer import AerSimulator
+
+qc = QuantumCircuit(3, 3)
+qc.h(0)
+qc.cx(0, 1)
+qc.cx(1, 2)
+qc.measure([0, 1, 2], [0, 1, 2])
+
+simulator = AerSimulator()
+counts = simulator.run(transpile(qc, simulator), shots=1024).result().get_counts()
+print(qc.draw(output="text"))
+print("GHZ Counts:", counts)`,
+    grover: `# Qiskit: Grover's 2-Qubit Search for |11>
+from qiskit import QuantumCircuit, transpile
+from qiskit_aer import AerSimulator
+
+qc = QuantumCircuit(2, 2)
+# 1. Equal superposition
+qc.h([0, 1])
+
+# 2. Oracle marking |11>
+qc.cz(0, 1)
+
+# 3. Grover Diffusion Operator
+qc.h([0, 1])
+qc.x([0, 1])
+qc.cz(0, 1)
+qc.x([0, 1])
+qc.h([0, 1])
+
+qc.measure([0, 1], [0, 1])
+simulator = AerSimulator()
+counts = simulator.run(transpile(qc, simulator), shots=1024).result().get_counts()
+print(qc.draw(output="text"))
+print("Grover amplification counts:", counts)`,
+  },
+  pennylane: {
+    bell: `# PennyLane: Bell State Entanglement
+import pennylane as qml
+import numpy as np
+
+dev = qml.device("default.qubit", wires=2, shots=1024)
+
+@qml.qnode(dev)
+def bell_circuit():
+    qml.Hadamard(wires=0)
+    qml.CNOT(wires=[0, 1])
+    return qml.counts()
+
+print("PennyLane Execution Results:")
+print(bell_circuit())`,
+    ghz: `# PennyLane: 3-Qubit GHZ State
+import pennylane as qml
+
+dev = qml.device("default.qubit", wires=3, shots=1024)
+
+@qml.qnode(dev)
+def ghz():
+    qml.Hadamard(wires=0)
+    qml.CNOT(wires=[0, 1])
+    qml.CNOT(wires=[1, 2])
+    return qml.probs(wires=[0, 1, 2])
+
+print("Basis probabilities (|000> and |111>):", ghz())`,
+    grover: `# PennyLane: Grover's Search Algorithm
+import pennylane as qml
+import numpy as np
+
+dev = qml.device("default.qubit", wires=2, shots=1024)
+
+@qml.qnode(dev)
+def grover_search():
+    # Superposition
+    qml.Hadamard(wires=0)
+    qml.Hadamard(wires=1)
+    # Oracle: Phase flip on |11>
+    qml.CZ(wires=[0, 1])
+    # Diffusion
+    qml.Hadamard(wires=0)
+    qml.Hadamard(wires=1)
+    qml.PauliX(wires=0)
+    qml.PauliX(wires=1)
+    qml.CZ(wires=[0, 1])
+    qml.PauliX(wires=0)
+    qml.PauliX(wires=1)
+    qml.Hadamard(wires=0)
+    qml.Hadamard(wires=1)
+    return qml.sample()
+
+print("Grover samples:", grover_search()[:10])`,
+  },
+  cirq: {
+    bell: `# Cirq: Bell State Simulation
+import cirq
+
+# Define 2 linear qubits
+q0, q1 = cirq.LineQubit.range(2)
+circuit = cirq.Circuit(
+    cirq.H(q0),
+    cirq.CNOT(q0, q1),
+    cirq.measure(q0, q1, key='result')
+)
+
+simulator = cirq.Simulator()
+results = simulator.run(circuit, repetitions=1024)
+
+print("Cirq Circuit:")
+print(circuit)
+print("\\nMeasurement Histogram:")
+print(results.histogram(key='result'))`,
+    ghz: `# Cirq: GHZ State
+import cirq
+
+qubits = cirq.LineQubit.range(3)
+circuit = cirq.Circuit(
+    cirq.H(qubits[0]),
+    cirq.CNOT(qubits[0], qubits[1]),
+    cirq.CNOT(qubits[1], qubits[2]),
+    cirq.measure(*qubits, key='ghz')
+)
+
+print(circuit)
+results = cirq.Simulator().run(circuit, repetitions=1024)
+print(results.histogram(key='ghz'))`,
+    grover: `# Cirq: 2-Qubit Grover Search
+import cirq
+
+q0, q1 = cirq.LineQubit.range(2)
+circuit = cirq.Circuit(
+    cirq.H.on_each(q0, q1),
+    cirq.CZ(q0, q1),  # Oracle for |11>
+    cirq.H.on_each(q0, q1),
+    cirq.X.on_each(q0, q1),
+    cirq.CZ(q0, q1),
+    cirq.X.on_each(q0, q1),
+    cirq.H.on_each(q0, q1),
+    cirq.measure(q0, q1, key='search')
+)
+
+print(circuit)
+print(cirq.Simulator().run(circuit, repetitions=1024).histogram(key='search'))`,
+  },
+};
+
+export const QuantumCodeSandbox: React.FC<QuantumCodeSandboxProps> = ({
+  onAskAIDebug,
+  onAskAIExplain,
+}) => {
+  const { t, isHindi } = useLanguage();
+  const copy = t.sandbox;
+  const [framework, setFramework] = useState<'qiskit' | 'pennylane' | 'cirq'>('qiskit');
+  const [selectedTemplate, setSelectedTemplate] = useState<'bell' | 'ghz' | 'grover'>('bell');
+  const [code, setCode] = useState<string>(TEMPLATES.qiskit.bell);
+  const [isRunning, setIsRunning] = useState(false);
+  const [output, setOutput] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleFrameworkChange = (newFw: 'qiskit' | 'pennylane' | 'cirq') => {
+    setFramework(newFw);
+    setCode(TEMPLATES[newFw][selectedTemplate]);
+    setOutput(null);
+  };
+
+  const handleTemplateChange = (tmpl: 'bell' | 'ghz' | 'grover') => {
+    setSelectedTemplate(tmpl);
+    setCode(TEMPLATES[framework][tmpl]);
+    setOutput(null);
+  };
+
+  const handleRunCode = () => {
+    setIsRunning(true);
+    setTimeout(() => {
+      let simulatedOutput = '';
+      if (selectedTemplate === 'bell') {
+        simulatedOutput = isHindi ? `उदाहरण आउटपुट
+
+सर्किट आरेख:
+q_0: ──H──■──M──
+          │  │
+q_1: ─────X──M──
+c: 2/══════════
+
+मापन हिस्टोग्राम:
+{'00': 518 शॉट्स (50.59%), '11': 506 शॉट्स (49.41%)}
+यह चयनित सर्किट के लिए उदाहरण परिणाम है।` : `Example output
+
+Circuit Diagram:
+q_0: ──H──■──M──
+          │  │
+q_1: ─────X──M──
+c: 2/══════════
+
+Measurement Histogram:
+{'00': 518 shots (50.59%), '11': 506 shots (49.41%)}
+This is an example result for the selected circuit.`;
+      } else if (selectedTemplate === 'ghz') {
+        simulatedOutput = isHindi ? `उदाहरण आउटपुट
+
+सर्किट आरेख:
+q_0: ──H──■────────
+          │        
+q_1: ─────X──■─────
+             │     
+q_2: ────────X─────
+
+मापन हिस्टोग्राम:
+{'000': 514 शॉट्स (50.20%), '111': 510 शॉट्स (49.80%)}
+यह उदाहरण दो अपेक्षित GHZ परिणाम प्रदर्शित करता है।` : `Example output
+
+Circuit Diagram:
+q_0: ──H──■────────
+          │        
+q_1: ─────X──■─────
+             │     
+q_2: ────────X─────
+
+Measurement Histogram:
+{'000': 514 shots (50.20%), '111': 510 shots (49.80%)}
+This example shows the two expected GHZ outcomes.`;
+      } else {
+        simulatedOutput = isHindi ? `उदाहरण आउटपुट
+
+मापन हिस्टोग्राम:
+{'11': 1024 शॉट्स (100.00%)}
+यह उदाहरण दिखाता है कि ग्रोवर एल्गोरिथ्म लक्ष्य अवस्था की संभावना कैसे बढ़ाता है।` : `Example output
+
+Measurement Histogram:
+{'11': 1024 shots (100.00%)}
+This example illustrates how Grover's algorithm increases the probability of the target state.`;
+      }
+      setOutput(simulatedOutput);
+      setIsRunning(false);
+    }, 600);
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Top Header & Framework Switcher */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-[#091124] border border-[#dfff3f]/25 rounded-2xl p-4 shadow-xl shadow-black/40">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-[#dfff3f]/10 text-[#dfff3f] border border-[#dfff3f]/20">
+            <Terminal className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
+              {copy.title}
+            </h3>
+            <p className="text-xs text-zinc-400">
+              {copy.subtitle}
+            </p>
+          </div>
+        </div>
+
+        {/* Framework Switcher */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex bg-white/[.05] border border-white/10 rounded-lg p-1 text-xs font-mono">
+            {(['qiskit', 'pennylane', 'cirq'] as const).map((fw) => (
+              <button
+                key={fw}
+                onClick={() => handleFrameworkChange(fw)}
+                className={`px-3 py-1 rounded capitalize transition-colors ${
+                  framework === fw
+                    ? 'bg-[#dfff3f] text-slate-950 font-bold'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {fw}
+              </button>
+            ))}
+          </div>
+
+          {/* Template presets */}
+          <select
+            value={selectedTemplate}
+            onChange={(e) => handleTemplateChange(e.target.value as any)}
+            aria-label="Select quantum algorithm template"
+            className="px-3 py-1.5 rounded-lg bg-white/[.05] border border-white/15 text-xs text-zinc-200 font-mono focus:outline-none focus:border-[#dfff3f]"
+          >
+            <option value="bell">{isHindi ? 'टेम्प्लेट: बेल अवस्था |Φ⁺⟩' : 'Template: Bell State |Φ⁺⟩'}</option>
+            <option value="ghz">{isHindi ? 'टेम्प्लेट: GHZ 3-क्यूबिट अवस्था' : 'Template: GHZ 3-Qubit State'}</option>
+            <option value="grover">{isHindi ? 'टेम्प्लेट: ग्रोवर खोज एल्गोरिथ्म' : "Template: Grover's Search"}</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Editor & Output Split Screen */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Code Editor Panel */}
+        <div className="bg-[#080e22] border border-[#dfff3f]/20 rounded-2xl overflow-hidden flex flex-col shadow-xl shadow-black/50">
+          <div className="px-4 py-2.5 bg-black/55 border-b border-white/10 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-red-500/80" />
+              <span className="w-3 h-3 rounded-full bg-yellow-500/80" />
+              <span className="w-3 h-3 rounded-full bg-green-500/80" />
+              <span className="text-xs font-mono text-zinc-400 ml-2">
+                main.py ({framework})
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopy}
+                className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1 font-mono"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied ? copy.copied : copy.copyCode}
+              </button>
+            </div>
+          </div>
+
+          <textarea
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            spellCheck={false}
+            className="w-full flex-1 min-h-[380px] p-4 bg-black/55 text-zinc-200 font-mono text-xs leading-relaxed focus:outline-none resize-none selection:bg-[#dfff3f]/30"
+          />
+
+          {/* Editor Action Buttons */}
+          <div className="p-3 bg-black/45 border-t border-white/10 flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              {onAskAIExplain && (
+                <button
+                  onClick={() => onAskAIExplain(code, framework)}
+                  className="px-3 py-1.5 rounded-lg bg-white/[.08] hover:bg-white/[.12] text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors border border-white/15"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  {copy.explainAI}
+                </button>
+              )}
+
+              {onAskAIDebug && (
+                <button
+                  onClick={() => onAskAIDebug(code, framework)}
+                  className="px-3 py-1.5 rounded-lg bg-white/[.08] hover:bg-white/[.12] text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors border border-white/15"
+                >
+                  <Bug className="w-3.5 h-3.5 text-amber-400" />
+                  {copy.debugAI}
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={handleRunCode}
+              disabled={isRunning}
+              className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-[#dfff3f] to-[#f4a81d] hover:from-[#efff96] hover:to-[#ffb347] text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/25 active:scale-95 disabled:opacity-50 transition-all"
+            >
+              <Play className={`w-3.5 h-3.5 ${isRunning ? 'animate-spin' : ''}`} />
+              {isRunning ? copy.running : copy.runCode}
+            </button>
+          </div>
+        </div>
+
+        {/* Console / Output Terminal Panel */}
+        <div className="bg-[#050914] border border-[#dfff3f]/20 rounded-2xl overflow-hidden flex flex-col shadow-xl shadow-black/50">
+          <div className="px-4 py-2.5 bg-black/55 border-b border-white/10 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-[#dfff3f]" />
+              <span className="text-xs font-mono font-bold text-zinc-300">
+                {copy.terminalOutput}
+              </span>
+            </div>
+
+            {output && (
+              <button
+                onClick={() => setOutput(null)}
+                className="text-xs text-zinc-400 hover:text-zinc-200 font-mono"
+              >
+                {copy.clearTerminal}
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1 p-4 font-mono text-xs text-zinc-300 overflow-y-auto max-h-[440px] whitespace-pre-wrap leading-relaxed">
+            {output ? (
+              <span className="text-[#e9ff8a]">{output}</span>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-zinc-400 py-16">
+                <Terminal className="w-8 h-8 mb-2 opacity-40 text-[#dfff3f]" />
+                <p>{copy.emptyOutputPrompt}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

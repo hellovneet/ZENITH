@@ -1,0 +1,322 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  HelpCircle, CheckCircle2, XCircle, RotateCcw,
+  Award, Sparkles, BookOpen, ChevronRight, ArrowLeft
+} from 'lucide-react';
+import { QuizQuestion } from '../../types/quantum';
+import { QUIZ_MOCKS, getQuizMock } from '../../data/mockQuizzes';
+import { useLanguage } from '../../i18n/LanguageContext';
+
+interface QuizAttempt {
+  currentIndex: number;
+  selectedOption: number | null;
+  isAnswered: boolean;
+  score: number;
+  isFinished: boolean;
+  answeredIndices: number[];
+  adaptiveLevel: 1 | 2 | 3;
+}
+
+interface QuantumQuizProps {
+  quizId?: string;
+  onSelectQuiz?: (quizId: string) => void;
+  onBackToMocks?: () => void;
+  onCompleteQuiz?: (score: number, total: number, quizId: string) => void;
+  onAskAIForHelp?: (question: QuizQuestion) => void;
+  onAnswer?: (quizId: string, questionId: string, correct: boolean) => void;
+  difficultyLevel?: number;
+}
+
+const emptyAttempt: QuizAttempt = {
+  currentIndex: 0,
+  selectedOption: null,
+  isAnswered: false,
+  score: 0,
+  isFinished: false,
+  answeredIndices: [],
+  adaptiveLevel: 1,
+};
+
+const storageKey = (id: string) => `qubitlab-quiz-attempt:v2:${id}`;
+
+const loadAttempt = (id: string): QuizAttempt => {
+  try {
+    const raw = window.sessionStorage.getItem(storageKey(id));
+    if (!raw) return { ...emptyAttempt };
+    return { ...emptyAttempt, ...JSON.parse(raw) };
+  } catch {
+    return { ...emptyAttempt };
+  }
+};
+
+export const QuantumQuiz: React.FC<QuantumQuizProps> = ({
+  quizId,
+  onSelectQuiz,
+  onBackToMocks,
+  onCompleteQuiz,
+  onAskAIForHelp,
+  onAnswer,
+  difficultyLevel = 1,
+}) => {
+  const { t, isHindi, localizeQuizTitle } = useLanguage();
+  const copy = t.quiz;
+  const mock = useMemo(() => getQuizMock(quizId), [quizId]);
+
+  const [attempt, setAttempt] = useState<QuizAttempt>(() => {
+    const saved = quizId ? loadAttempt(quizId) : { ...emptyAttempt };
+    return {
+      ...emptyAttempt,
+      ...saved,
+      answeredIndices: Array.isArray(saved.answeredIndices) ? saved.answeredIndices : [],
+      adaptiveLevel: saved.adaptiveLevel === 2 || saved.adaptiveLevel === 3
+        ? saved.adaptiveLevel
+        : (difficultyLevel === 2 || difficultyLevel === 3 ? difficultyLevel : 1),
+    };
+  });
+
+  useEffect(() => {
+    const saved = quizId ? loadAttempt(quizId) : { ...emptyAttempt };
+    setAttempt({
+      ...emptyAttempt,
+      ...saved,
+      answeredIndices: Array.isArray(saved.answeredIndices) ? saved.answeredIndices : [],
+      adaptiveLevel: saved.adaptiveLevel === 2 || saved.adaptiveLevel === 3
+        ? saved.adaptiveLevel
+        : (difficultyLevel === 2 || difficultyLevel === 3 ? difficultyLevel : 1),
+    });
+  }, [quizId, difficultyLevel]);
+
+  useEffect(() => {
+    if (!quizId || typeof window === 'undefined') return;
+    window.sessionStorage.setItem(storageKey(quizId), JSON.stringify(attempt));
+  }, [quizId, attempt]);
+
+  if (!mock) {
+    return (
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="text-center space-y-2">
+          <div className="inline-flex p-3 rounded-xl bg-[#dfff3f]/10 border border-[#dfff3f]/30 text-[#e9ff8a]">
+            <BookOpen className="w-6 h-6" />
+          </div>
+          <h2 className="text-2xl font-bold text-zinc-100">{copy.chooseMock}</h2>
+          <p className="text-sm text-zinc-300">{copy.chooseMockSub}</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {QUIZ_MOCKS.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => onSelectQuiz?.(item.id)}
+              className="text-left p-5 rounded-2xl bg-white/[.06] border border-white/10 hover:border-[#dfff3f]/50 hover:bg-white/[.05] transition-all group"
+            >
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <Award className="w-5 h-5 text-amber-400" />
+                <span className="text-[10px] font-semibold text-[#e9ff8a] bg-[#dfff3f]/10 border border-[#dfff3f]/20 px-2 py-1 rounded">
+                  30 {copy.mcqs}
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-zinc-100">{localizeQuizTitle(item.id, item.title)}</h3>
+              <p className="text-sm text-zinc-300 mt-2 leading-relaxed">{item.description}</p>
+              <div className="mt-4 text-xs text-[#dfff3f] flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                {copy.startMock} <ChevronRight className="w-4 h-4" />
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const questions = mock.questions;
+  if (questions.length === 0) {
+    return (
+      <div className="max-w-xl mx-auto p-6 rounded-2xl bg-white/[.05] border border-white/10 text-center text-zinc-300">
+        {copy.noQuestions}
+      </div>
+    );
+  }
+
+  const currentIndex = Math.min(
+    Math.max(0, Number.isFinite(attempt.currentIndex) ? attempt.currentIndex : 0),
+    questions.length - 1
+  );
+  const currentQ = questions[currentIndex];
+  const correctIndex = currentQ.correctAnswer ?? currentQ.correctIndex ?? 0;
+
+  const updateAttempt = (patch: Partial<QuizAttempt>) =>
+    setAttempt((current) => ({ ...current, ...patch }));
+
+  const handleConfirmAnswer = () => {
+    if (attempt.selectedOption === null || attempt.isAnswered) return;
+    const correct = attempt.selectedOption === correctIndex;
+    const nextLevel: 1 | 2 | 3 = correct
+      ? Math.min(3, attempt.adaptiveLevel + 1) as 1 | 2 | 3
+      : Math.max(1, attempt.adaptiveLevel - 1) as 1 | 2 | 3;
+    onAnswer?.(mock.id, currentQ.id, correct);
+    updateAttempt({
+      isAnswered: true,
+      score: attempt.score + (correct ? 1 : 0),
+      answeredIndices: attempt.answeredIndices.includes(currentIndex)
+        ? attempt.answeredIndices
+        : [...attempt.answeredIndices, currentIndex],
+      adaptiveLevel: nextLevel,
+    });
+  };
+
+  const handleNext = () => {
+    if (attempt.answeredIndices.length >= questions.length) {
+      updateAttempt({ isFinished: true });
+      onCompleteQuiz?.(attempt.score, questions.length, mock.id);
+      return;
+    }
+
+    const unanswered = questions
+      .map((question, index) => ({ question, index }))
+      .filter(({ index }) => !attempt.answeredIndices.includes(index));
+
+    const matching = unanswered.filter(
+      ({ question }) => (question.difficulty ?? 1) === attempt.adaptiveLevel
+    );
+    const pool = matching.length ? matching : unanswered.sort(
+      (a, b) =>
+        Math.abs((a.question.difficulty ?? 1) - attempt.adaptiveLevel) -
+        Math.abs((b.question.difficulty ?? 1) - attempt.adaptiveLevel)
+    );
+    const next = pool[0];
+    if (!next) return;
+
+    updateAttempt({
+      currentIndex: next.index,
+      selectedOption: null,
+      isAnswered: false,
+    });
+  };
+
+  const handleRestart = () => {
+    if (typeof window !== 'undefined') window.sessionStorage.removeItem(storageKey(mock.id));
+    setAttempt({ ...emptyAttempt });
+  };
+
+  if (attempt.isFinished) {
+    const percentage = Math.round((attempt.score / questions.length) * 100);
+    return (
+      <div className="bg-white/[.06] border border-white/10 rounded-2xl p-8 text-center max-w-xl mx-auto shadow-2xl space-y-5">
+        <Award className="w-10 h-10 text-amber-400 mx-auto" />
+        <div>
+          <h3 className="text-xl font-bold text-zinc-100">
+            {localizeQuizTitle(mock.id, mock.title)} {copy.results}
+          </h3>
+          <p className="text-xs text-zinc-300 mt-1">{copy.resultAvailable}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-4 rounded-xl bg-black/55 border border-white/10">
+            <div className="text-2xl font-bold text-[#dfff3f]">{attempt.score}/{questions.length}</div>
+            <div className="text-xs text-zinc-300">{copy.correct}</div>
+          </div>
+          <div className="p-4 rounded-xl bg-black/55 border border-white/10">
+            <div className="text-2xl font-bold text-purple-400">{percentage}%</div>
+            <div className="text-xs text-zinc-300">{copy.score}</div>
+          </div>
+        </div>
+        <p className="text-xs text-zinc-300">
+          {percentage >= 80 ? copy.strongResult : copy.reviewResult}
+        </p>
+        <div className="flex flex-wrap justify-center gap-3">
+          <button onClick={handleRestart} className="px-5 py-2.5 rounded-lg bg-[#dfff3f] hover:bg-[#efff96] text-slate-950 font-bold text-xs flex items-center gap-2">
+            <RotateCcw className="w-4 h-4" /> {copy.tryAgain}
+          </button>
+          <button onClick={onBackToMocks} className="px-5 py-2.5 rounded-lg bg-white/[.05] border border-white/15 hover:border-slate-500 text-zinc-200 font-bold text-xs">
+            {copy.allMocks}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto bg-white/[.045] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-6">
+      <div className="flex items-center justify-between gap-3 pb-3 border-b border-white/10">
+        <div>
+          <button onClick={onBackToMocks} className="text-xs text-zinc-300 hover:text-[#e9ff8a] flex items-center gap-1 mb-2">
+            <ArrowLeft className="w-3.5 h-3.5" /> {copy.allMocks}
+          </button>
+          <div className="flex items-center gap-2">
+            <HelpCircle className="w-5 h-5 text-[#dfff3f]" />
+            <span className="text-xs font-bold text-zinc-200">{localizeQuizTitle(mock.id, mock.title)}</span>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-xs font-mono text-[#e9ff8a]">
+            {copy.question} {attempt.answeredIndices.length + (attempt.isAnswered ? 0 : 1)}/{questions.length}
+          </div>
+          <div className="flex items-center justify-end gap-2 mt-1">
+            <span className="text-xs text-zinc-300">{copy.score}: {attempt.score}</span>
+            <span className="text-[10px] font-semibold px-2 py-1 rounded border border-[#dfff3f]/20 bg-[#dfff3f]/10 text-[#e9ff8a]">
+              {attempt.adaptiveLevel === 1 ? (isHindi ? 'शुरुआती' : 'Beginner') : attempt.adaptiveLevel === 2 ? (isHindi ? 'मध्यवर्ती' : 'Intermediate') : (isHindi ? 'उन्नत' : 'Advanced')}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="text-base font-semibold text-zinc-100 leading-snug">{currentQ.question}</h3>
+        <div className="space-y-2.5">
+          {currentQ.options.map((opt, idx) => {
+            const selected = attempt.selectedOption === idx;
+            const correct = idx === correctIndex;
+            const style = attempt.isAnswered
+              ? correct
+                ? 'border-emerald-500 bg-emerald-500/10 text-emerald-200'
+                : selected
+                ? 'border-rose-500 bg-rose-500/10 text-rose-200'
+                : 'border-white/10 bg-white/[.05] text-zinc-300'
+              : selected
+              ? 'border-[#e9ff8a] bg-[#dfff3f]/10 text-cyan-100'
+              : 'border-white/10 bg-white/[.05] text-zinc-300 hover:border-white/15';
+
+            return (
+              <button
+                key={idx}
+                disabled={attempt.isAnswered}
+                onClick={() => !attempt.isAnswered && updateAttempt({ selectedOption: idx })}
+                className={`w-full p-3.5 rounded-xl border flex items-center gap-3 text-left transition-all ${style}`}
+              >
+                <span className="w-6 h-6 rounded border border-white/15 flex items-center justify-center text-[11px] shrink-0">{String.fromCharCode(65 + idx)}</span>
+                <span className="text-sm leading-6">{opt}</span>
+                {attempt.isAnswered && correct && <CheckCircle2 className="w-4 h-4 ml-auto text-emerald-400" />}
+                {attempt.isAnswered && selected && !correct && <XCircle className="w-4 h-4 ml-auto text-rose-400" />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {attempt.isAnswered && (
+        <div className="p-4 rounded-xl bg-black/55 border border-white/10 space-y-2 text-xs">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-bold text-[#e9ff8a] flex items-center gap-1.5"><Sparkles className="w-4 h-4" /> {copy.explanation}</span>
+            <button onClick={() => onAskAIForHelp?.(currentQ)} className="text-[11px] text-purple-300 hover:underline">{copy.explainFurther}</button>
+          </div>
+          <p className="text-zinc-300 leading-relaxed">{currentQ.explanation}</p>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between pt-2">
+        <span className="text-xs text-zinc-300">{copy.sessionNote}</span>
+        {!attempt.isAnswered ? (
+          <button
+            onClick={handleConfirmAnswer}
+            disabled={attempt.selectedOption === null}
+            className="px-5 py-2 rounded-lg bg-[#dfff3f] hover:bg-[#efff96] text-slate-950 font-bold text-xs disabled:opacity-40"
+          >
+            {copy.checkAnswer}
+          </button>
+        ) : (
+          <button onClick={handleNext} className="px-5 py-2 rounded-lg bg-gradient-to-r from-[#dfff3f] to-[#f4a81d] text-slate-950 font-bold text-xs flex items-center gap-1.5">
+            {currentIndex + 1 < questions.length ? copy.nextQuestion : copy.viewResults} <ChevronRight className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
