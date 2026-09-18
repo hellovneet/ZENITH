@@ -58,7 +58,7 @@ export const QuantumQuiz: React.FC<QuantumQuizProps> = ({
   onAnswer,
   difficultyLevel = 1,
 }) => {
-  const { t, isHindi, localizeQuizTitle } = useLanguage();
+  const { t, isHindi, localizeQuizTitle, localizeQuizText } = useLanguage();
   const copy = t.quiz;
   const mock = useMemo(() => getQuizMock(quizId), [quizId]);
 
@@ -116,7 +116,7 @@ export const QuantumQuiz: React.FC<QuantumQuizProps> = ({
                 </span>
               </div>
               <h3 className="text-sm font-bold text-zinc-100">{localizeQuizTitle(item.id, item.title)}</h3>
-              <p className="text-sm text-zinc-300 mt-2 leading-relaxed">{item.description}</p>
+              <p className="text-sm text-zinc-300 mt-2 leading-relaxed">{localizeQuizText(item.description)}</p>
               <div className="mt-4 text-xs text-[#dfff3f] flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                 {copy.startMock} <ChevronRight className="w-4 h-4" />
               </div>
@@ -259,7 +259,7 @@ export const QuantumQuiz: React.FC<QuantumQuizProps> = ({
       </div>
 
       <div className="space-y-4">
-        <h3 className="text-base font-semibold text-zinc-100 leading-snug">{currentQ.question}</h3>
+        <h3 className="text-base font-semibold text-zinc-100 leading-snug">{localizeQuizText(currentQ.question)}</h3>
         <div className="space-y-2.5">
           {currentQ.options.map((opt, idx) => {
             const selected = attempt.selectedOption === idx;
@@ -282,7 +282,7 @@ export const QuantumQuiz: React.FC<QuantumQuizProps> = ({
                 className={`w-full p-3.5 rounded-xl border flex items-center gap-3 text-left transition-all ${style}`}
               >
                 <span className="w-6 h-6 rounded border border-white/15 flex items-center justify-center text-[11px] shrink-0">{String.fromCharCode(65 + idx)}</span>
-                <span className="text-sm leading-6">{opt}</span>
+                <span className="text-sm leading-6">{localizeQuizText(opt)}</span>
                 {attempt.isAnswered && correct && <CheckCircle2 className="w-4 h-4 ml-auto text-emerald-400" />}
                 {attempt.isAnswered && selected && !correct && <XCircle className="w-4 h-4 ml-auto text-rose-400" />}
               </button>
@@ -297,7 +297,7 @@ export const QuantumQuiz: React.FC<QuantumQuizProps> = ({
             <span className="font-bold text-[#e9ff8a] flex items-center gap-1.5"><Sparkles className="w-4 h-4" /> {copy.explanation}</span>
             <button onClick={() => onAskAIForHelp?.(currentQ)} className="text-[11px] text-purple-300 hover:underline">{copy.explainFurther}</button>
           </div>
-          <p className="text-zinc-300 leading-relaxed">{currentQ.explanation}</p>
+          <p className="text-zinc-300 leading-relaxed">{localizeQuizText(currentQ.explanation)}</p>
         </div>
       )}
 
